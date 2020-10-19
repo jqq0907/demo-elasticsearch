@@ -1,0 +1,6 @@
+spring:
+  elasticsearch:
+    rest:
+      uris: http://101.201.255.155:9200
+  application:
+    name: demo-elasticsearch
