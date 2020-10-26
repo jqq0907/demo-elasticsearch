@@ -24,8 +24,12 @@ import org.elasticsearch.client.indices.CreateIndexRequest;
 import org.elasticsearch.client.indices.CreateIndexResponse;
 import org.elasticsearch.client.indices.GetIndexRequest;
 import org.elasticsearch.client.indices.GetIndexResponse;
+import org.elasticsearch.common.settings.Settings;
 import org.elasticsearch.common.unit.TimeValue;
+import org.elasticsearch.common.xcontent.XContent;
+import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentType;
+import org.elasticsearch.common.xcontent.json.JsonXContent;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
@@ -57,12 +61,72 @@ class DemoElasticsearchApplicationTests {
      */
     @Test
     void createIndex() throws IOException {
-        //1.创建索引请求
+        //1.创建请求
         CreateIndexRequest request = new CreateIndexRequest("index_01");
-        //2.客户端执行请求 IndicesClient，请求后获得响应
-        CreateIndexResponse indexResponse =
-                client.indices().create(request, RequestOptions.DEFAULT);
-        System.out.println(indexResponse.index());
+        //2.索引setting,
+        Settings.Builder setting = Settings.builder()
+                .put("number_of_replicas", "1") //备份数
+                .put("number_of_shards", "1"); //分片数
+        //3.索引结构mapping
+        /*
+        "mappings": {
+            "properties": {
+              "name": {
+                "type": "text",
+                "analyzer": "ik_max_word",
+                "index": true,
+                "store": false
+              },
+              "author": {
+                "type": "keyword"
+              },
+              "count": {
+                "type": "long"
+              },
+              "onSale": {
+                "type": "date",
+                "format": "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis"
+              },
+              "desc": {
+                "type": "text",
+                "analyzer": "ik_max_word"
+              }
+            }
+          }
+         */
+        XContentBuilder mapping = JsonXContent.contentBuilder()
+                .startObject()
+                    .startObject("properties")
+                        .startObject("name")
+                            .field("type", "text")
+                            .field("analyzer", "ik_max_word")
+                            .field("index", "true")
+                            .field("store", "false")
+                        .endObject()
+                        .startObject("author")
+                            .field("type", "keyword")
+                        .endObject()
+                        .startObject("count")
+                            .field("type", "long")
+                        .endObject()
+                        .startObject("onSale")
+                            .field("type", "date")
+                            .field("format", "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis")
+                        .endObject()
+                        .startObject("desc")
+                            .field("type", "text")
+                            .field("analyzer", "ik_max_word")
+                        .endObject()
+                    .endObject()
+                .endObject();
+
+        //3.封装请求
+        request.settings(setting).mapping(mapping);
+        //通过client创建索引
+        CreateIndexResponse response = client.indices().create(request, RequestOptions.DEFAULT);
+
+        //4.获取结果
+        System.out.println(response);
     }
 
     /**
@@ -122,7 +186,7 @@ class DemoElasticsearchApplicationTests {
      */
     @Test
     void getDocument() throws IOException {
-        //创建请求
+        //1.创建请求
         GetRequest request = new GetRequest("index_01", "1");
         //不获取返回的_source上下文
         request.fetchSourceContext(new FetchSourceContext(false));
@@ -191,44 +255,46 @@ class DemoElasticsearchApplicationTests {
     }
 
     /**
-     * 查询
+     * term查询：完全匹配，搜索之前不会对搜索的关键词进行分词
      */
     @Test
-    void searchDocument() throws IOException {
-        //搜索请求
-        SearchRequest searchRequest = new SearchRequest("index_01");
+    void searchTerm() throws IOException {
+        //1.创建请求
+        SearchRequest request = new SearchRequest("book");
 
-        //构建搜索条件构造
-        SearchSourceBuilder searchSourceBuilder = new SearchSourceBuilder();
+        //2.查询条件
+        SearchSourceBuilder builder = new SearchSourceBuilder();
+        builder.from(0);
+        builder.size(10); //分页从0-10，默认查10条数据
 
-        //分页
-        searchSourceBuilder.from();
-        searchSourceBuilder.size();
+        builder.query(QueryBuilders.termQuery("name", "西游记"));
 
-        //高亮
-        HighlightBuilder highlightBuilder = new HighlightBuilder();
-        highlightBuilder.field("title");
-        highlightBuilder.preTags("<span style='color:red'>");
-        highlightBuilder.postTags("</span>");
-        searchSourceBuilder.highlighter(highlightBuilder);
-
-        //查询条件
-        //termQuery()精确匹配
-        //matchAllQuery()匹配所有
-        QueryBuilders.termQuery("title", "小米手机m"); //精确匹配
-        QueryBuilders.matchAllQuery(); //匹配所有
-
-        searchSourceBuilder.timeout(new TimeValue(60, TimeUnit.SECONDS));
-
-        searchRequest.source(searchSourceBuilder);
-        SearchResponse response = client.search(searchRequest, RequestOptions.DEFAULT);
-
+        //3.执行查询
+        SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+        //4.输出结果
         for (SearchHit hit : response.getHits().getHits()) {
-            //数据
             System.out.println(hit.getSourceAsMap());
-            //获取高亮字段
-            Map<String, HighlightField> highlightFields = hit.getHighlightFields();
-            HighlightField title = highlightFields.get("title");
+        }
+    }
+
+    /**
+     * match_all查询
+     */
+    @Test
+    public void searchMatchAll() throws IOException {
+        //1.创建request
+        SearchRequest request = new SearchRequest("book"); //book是index名
+        //2.创建查询条件
+        SearchSourceBuilder builder = new SearchSourceBuilder();
+        builder.query(QueryBuilders.matchAllQuery());
+
+        request.source(builder);
+        //3.执行查询
+        SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+
+        //输出结果
+        for (SearchHit hit : response.getHits().getHits()) {
+            System.out.println(hit.getSourceAsMap());
         }
     }
 }
