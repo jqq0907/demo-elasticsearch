@@ -1,6 +1,7 @@
 package com.example.elasticsearch;
 
 import com.alibaba.fastjson.JSON;
+import com.example.pojo.Book;
 import com.example.pojo.Item;
 import net.minidev.json.JSONArray;
 import org.elasticsearch.action.admin.indices.delete.DeleteIndexAction;
@@ -30,6 +31,7 @@ import org.elasticsearch.common.xcontent.XContent;
 import org.elasticsearch.common.xcontent.XContentBuilder;
 import org.elasticsearch.common.xcontent.XContentType;
 import org.elasticsearch.common.xcontent.json.JsonXContent;
+import org.elasticsearch.index.query.Operator;
 import org.elasticsearch.index.query.QueryBuilder;
 import org.elasticsearch.index.query.QueryBuilders;
 import org.elasticsearch.search.SearchHit;
@@ -44,10 +46,11 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.data.elasticsearch.core.ElasticsearchRestTemplate;
 import org.springframework.data.elasticsearch.repository.config.EnableElasticsearchRepositories;
+import org.springframework.test.context.TestExecutionListeners;
 
 import java.io.IOException;
-import java.util.ArrayList;
-import java.util.Map;
+import java.time.LocalDate;
+import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 @SpringBootTest
@@ -96,28 +99,28 @@ class DemoElasticsearchApplicationTests {
          */
         XContentBuilder mapping = JsonXContent.contentBuilder()
                 .startObject()
-                    .startObject("properties")
-                        .startObject("name")
-                            .field("type", "text")
-                            .field("analyzer", "ik_max_word")
-                            .field("index", "true")
-                            .field("store", "false")
-                        .endObject()
-                        .startObject("author")
-                            .field("type", "keyword")
-                        .endObject()
-                        .startObject("count")
-                            .field("type", "long")
-                        .endObject()
-                        .startObject("onSale")
-                            .field("type", "date")
-                            .field("format", "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis")
-                        .endObject()
-                        .startObject("desc")
-                            .field("type", "text")
-                            .field("analyzer", "ik_max_word")
-                        .endObject()
-                    .endObject()
+                .startObject("properties")
+                .startObject("name")
+                .field("type", "text")
+                .field("analyzer", "ik_max_word")
+                .field("index", "true")
+                .field("store", "false")
+                .endObject()
+                .startObject("author")
+                .field("type", "keyword")
+                .endObject()
+                .startObject("count")
+                .field("type", "long")
+                .endObject()
+                .startObject("onSale")
+                .field("type", "date")
+                .field("format", "yyyy-MM-dd HH:mm:ss||yyyy-MM-dd||epoch_millis")
+                .endObject()
+                .startObject("desc")
+                .field("type", "text")
+                .field("analyzer", "ik_max_word")
+                .endObject()
+                .endObject()
                 .endObject();
 
         //3.封装请求
@@ -136,8 +139,9 @@ class DemoElasticsearchApplicationTests {
      */
     @Test
     void existIndex() throws IOException {
-        //获取索引请求
+        //1.获取索引请求
         GetIndexRequest request = new GetIndexRequest("index_01");
+        //2.判断是否存在
         boolean response = client.indices().exists(request, RequestOptions.DEFAULT);
         System.out.println(response);
     }
@@ -161,20 +165,19 @@ class DemoElasticsearchApplicationTests {
      */
     @Test
     void addDocument() throws IOException {
-        //创建对象
-        Item item = new Item(1L, "小米手机", "手机", "小米", 3799d, "/1");
-        //创建请求
-        IndexRequest index_01 = new IndexRequest("index_01");
-        //规则 put /index_01/_doc/1
-        index_01.id("1");
-        index_01.timeout(TimeValue.timeValueSeconds(1));
-        index_01.timeout("1s"); //二选一
+        //1.数据
+        Book book = new Book("心理科", "夏至", 112L, new Date(), "交通出版社");
+        //2.创建请求
+        IndexRequest request = new IndexRequest("book");
+        request.id("1");
+        request.timeout(TimeValue.timeValueSeconds(1));
+        request.timeout("1s"); //二选一
 
         //将数据放入请求
-        index_01.source(JSON.toJSONString(item), XContentType.JSON);
+        request.source(JSON.toJSONString(book), XContentType.JSON);
 
-        //发送请求
-        IndexResponse response = client.index(index_01, RequestOptions.DEFAULT);
+        //3.client请求
+        IndexResponse response = client.index(request, RequestOptions.DEFAULT);
         System.out.println(response.toString());
         System.out.println(response.status()); //对于命运返回状态
     }
@@ -187,7 +190,7 @@ class DemoElasticsearchApplicationTests {
     @Test
     void getDocument() throws IOException {
         //1.创建请求
-        GetRequest request = new GetRequest("index_01", "1");
+        GetRequest request = new GetRequest("book", "1");
         //不获取返回的_source上下文
         request.fetchSourceContext(new FetchSourceContext(false));
 
@@ -197,9 +200,11 @@ class DemoElasticsearchApplicationTests {
         boolean exists = client.exists(request, RequestOptions.DEFAULT);
         System.out.println(exists);
 
-        //获取文档信息
+        //2.获取文档信息
         GetResponse documentFields = client.get(request, RequestOptions.DEFAULT);
+
         //documentFields与命令式一样
+        //3.输出数据
         System.out.println(documentFields.getSourceAsString());
     }
 
@@ -210,13 +215,18 @@ class DemoElasticsearchApplicationTests {
      */
     @Test
     void updateDocument() throws IOException {
-        //创建对象
-        Item item = new Item(1L, "小米手机m", "手机", "小米", 3699d, "/1");
-        UpdateRequest updateRequest = new UpdateRequest("index_01", "1");
+        //1.数据,通过map或者json对象
+//        Item item = new Item(1L, "小米手机m", "手机", "小米", 3699d, "/1");
+        Book book = new Book("心理科", "夏至", 200L, new Date(), "交通出版社");
+        Map<String, Object> map = new HashMap<>();
+        map.put("name", "心理科大全");
+        UpdateRequest updateRequest = new UpdateRequest("book", "1");
         updateRequest.timeout("1s");
-        updateRequest.doc(JSON.toJSONString(item), XContentType.JSON);
-
+//        updateRequest.doc(map);
+        updateRequest.doc(JSON.toJSONString(book), XContentType.JSON);
+        //2.client请求
         UpdateResponse response = client.update(updateRequest, RequestOptions.DEFAULT);
+        //3.输出结果
         System.out.println(response.status());
     }
 
@@ -268,7 +278,7 @@ class DemoElasticsearchApplicationTests {
         builder.size(10); //分页从0-10，默认查10条数据
 
         builder.query(QueryBuilders.termQuery("name", "西游记"));
-
+        request.source(builder);
         //3.执行查询
         SearchResponse response = client.search(request, RequestOptions.DEFAULT);
         //4.输出结果
@@ -278,10 +288,32 @@ class DemoElasticsearchApplicationTests {
     }
 
     /**
+     * terms查询
+     *
+     * @throws IOException
+     */
+    @Test
+    void searchTerms() throws IOException {
+        //1.创建request
+        SearchRequest request = new SearchRequest("book");
+        //2.创建查询条件
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        List<String> list = new ArrayList<>();
+        list.add("西游记");
+        list.add("心理科");
+        sourceBuilder.query(QueryBuilders.termsQuery("name", list));
+        request.source(sourceBuilder);
+        //3.client执行查询
+        SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+        //4.输出结果
+        System.out.println(response);
+    }
+
+    /**
      * match_all查询
      */
     @Test
-    public void searchMatchAll() throws IOException {
+    void searchMatchAll() throws IOException {
         //1.创建request
         SearchRequest request = new SearchRequest("book"); //book是index名
         //2.创建查询条件
@@ -296,5 +328,61 @@ class DemoElasticsearchApplicationTests {
         for (SearchHit hit : response.getHits().getHits()) {
             System.out.println(hit.getSourceAsMap());
         }
+    }
+
+    /**
+     * match查询
+     *
+     * @throws IOException
+     */
+    @Test
+    void searchMatch() throws IOException {
+        //1.创建request
+        SearchRequest request = new SearchRequest("book");
+        //2.创建查询条件
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.query(QueryBuilders.matchQuery("name", "西游"));
+        request.source(sourceBuilder);
+        //3.执行查询
+        SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+        //4.输出结果
+        System.out.println(response);
+    }
+
+    /**
+     * match_boolean查询
+     *
+     * @throws IOException
+     */
+    @Test
+    void searchMatch_boolean() throws IOException {
+        //1.创建request
+        SearchRequest request = new SearchRequest("book");
+        //2.创建查询条件
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.query(QueryBuilders.matchQuery("name", "西游 心理") // 用空格隔开
+                .operator(Operator.OR)); //and or
+        //3.执行查询
+        SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+        //4.输出结果
+        System.out.println(response);
+    }
+
+    /**
+     * multi_match查询，多个field对应一个text
+     * @throws IOException
+     */
+    @Test
+    void searchMulti_match() throws IOException {
+        //1.创建request
+        SearchRequest request = new SearchRequest("book");
+        //2.创建查询条件
+        SearchSourceBuilder sourceBuilder = new SearchSourceBuilder();
+        sourceBuilder.query(QueryBuilders.multiMatchQuery("西游","name","desc"));
+        request.source(sourceBuilder);
+        //3.执行查询
+        SearchResponse response = client.search(request, RequestOptions.DEFAULT);
+        //4.输出结果
+        System.out.println(response);
     }
 }
