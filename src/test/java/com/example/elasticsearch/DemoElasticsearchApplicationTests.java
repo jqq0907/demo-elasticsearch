@@ -75,7 +75,7 @@ class DemoElasticsearchApplicationTests {
     private BookRepository bookRepository;
 
     /**
-     * 通过模板查询
+     * 通过模板查询,简单查询使用
      */
     @Test
     void test() {
