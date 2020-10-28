@@ -1,5 +1,5 @@
 #ES代码在test
-
+[访问kinbana的console](http://101.201.255.155:5601/app/dev_tools#/console)
 ##form和size的ES查询原理
     1.将用户指定的关键词进行分词
     2.去分词库中检索关键词，得到多个id
