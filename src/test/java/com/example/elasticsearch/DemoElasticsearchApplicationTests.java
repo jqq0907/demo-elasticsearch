@@ -1,6 +1,7 @@
 package com.example.elasticsearch;
 
 import com.alibaba.fastjson.JSON;
+import com.example.BookRepository;
 import com.example.pojo.Book;
 import com.example.pojo.Item;
 import net.minidev.json.JSONArray;
@@ -66,10 +67,21 @@ import java.util.*;
 import java.util.concurrent.TimeUnit;
 
 @SpringBootTest
-@EnableElasticsearchRepositories
+@EnableElasticsearchRepositories(basePackages = "com.example")
 class DemoElasticsearchApplicationTests {
     @Autowired
     private RestHighLevelClient client;
+    @Autowired
+    private BookRepository bookRepository;
+
+    /**
+     * 通过模板查询
+     */
+    @Test
+    void test() {
+        Book book = (Book) this.bookRepository.findAll();
+        System.out.println(book);
+    }
 
     /**
      * 索引的创建
